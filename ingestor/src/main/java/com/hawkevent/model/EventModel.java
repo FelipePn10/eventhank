@@ -1,13 +1,22 @@
 package com.hawkevent.model;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.hawkevent.enums.ActionTakenEnum;
+import lombok.Builder;
+import lombok.Data;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-public class Event {
+@Data
+@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class EventModel {
     UUID eventId;
     String traceId;
     Instant timestamp;
@@ -24,5 +33,11 @@ public class Event {
     ActionTakenEnum actionTaken;
     boolean bodyTruncated;
     Map<String, Object> enrichment;
+
+    public String toJson() throws JsonProcessingException {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        return mapper.writeValueAsString(this);
+    }
 
 }
