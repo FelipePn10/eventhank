@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Event",
+  "description": "Schema for security events",
+  "version": "v1",
+  "type": "object",
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "traceId": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sourceIp": {
+      "type": "string"
+    },
+    "sourcePort": {
+      "type": "integer"
+    },
+    "method": {
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "queryParams": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "body": {
+      "type": "string"
+    },
+    "bodyHash": {
+      "type": "string"
+    },
+    "suspicionScore": {
+      "type": "number"
+    },
+    "detectedRules": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "actionTaken": {
+      "type": "string",
+      "enum": ["LOG_ONLY", "HONEYPOT", "BLOCK"]
+    },
+    "bodyTruncated": {
+      "type": "boolean"
+    },
+    "enrichment": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "eventId",
+    "timestamp",
+    "sourceIp",
+    "sourcePort",
+    "method",
+    "path",
+    "suspicionScore",
+    "actionTaken",
+    "bodyTruncated"
+  ],
+  "additionalProperties": false
+}

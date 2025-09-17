@@ -3,6 +3,7 @@ plugins {
     id 'application'
     id 'org.springframework.boot' version '3.5.5'
     id 'io.spring.dependency-management' version '1.1.3'
+    id 'io.freefair.lombok' version '8.10'  // Plugin Lombok para Gradle
 }
 
 group = 'com.hawkevent'
@@ -14,14 +15,23 @@ repositories {
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation("org.springframework:spring-webflux:7.0.0-M9")
-    implementation("org.springframework.boot:spring-boot-starter-actuator:4.0.0-M2")
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'  // Versão gerenciada pelo Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'  // Versão gerenciada pelo Spring Boot
     implementation 'org.springframework.kafka:spring-kafka'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'  // Suporte a Java 8 Date/Time
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
     runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    testImplementation 'com.github.java-json-tools:json-schema-validator:2.2.14'
 }
 
 application {
