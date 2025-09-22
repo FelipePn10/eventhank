@@ -4,36 +4,49 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
-// IP real do client
+/**
+ * Utility class to resolve the real client IP address from a ServerWebExchange.
+ * Handles common proxy headers and validates against private/local IPs.
+ */
 public class IpUtil {
 
-    /*
-    * @param exchange ServerWebExchange contém informações da requisição
-    * @return String endereço Ip do cliente
-    * */
+    // Regex for valid IPv4: matches 0-255.0-255.0-255.0-255
+    private static final Pattern IPV4_PATTERN = Pattern.compile(
+            "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
+
+    // Regex for valid IPv6 (simplified, not exhaustive but covers common cases)
+    private static final Pattern IPV6_PATTERN = Pattern.compile(
+            "^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,7}:$|" +
+                    "^(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}$|" +
+                    "^(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}$|^(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}$|" +
+                    "^(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}$|^[0-9a-fA-F]{1,4}:(?:(?::[0-9a-fA-F]{1,4}){1,6})$|" +
+                    "^:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)$");
+
+    /**
+     * Resolves the client IP from the request, checking proxy headers first.
+     *
+     * @param exchange the ServerWebExchange containing request info
+     * @return the client IP as a String
+     */
     public static String resolveClientIp(ServerWebExchange exchange) {
         ServerHttpRequest request = exchange.getRequest();
 
-        // X-Forwarded-For (padrão)
-        String clientIp = extractIpFromHeader(request, "X_Forwarded-For");
+        // Standard X-Forwarded-For header
+        String clientIp = extractIpFromHeader(request, "X-Forwarded-For");
         if (isValidIp(clientIp)) {
             return clientIp;
         }
 
-        // Cabeçalhos comuns de proxy
+        // Common proxy headers
         String[] proxyHeaders = {
-                "Proxy-Client-IP",
-                "WL-Proxy-Client-IP",
-                "HTTP_X_FORWARDED_FOR",
-                "HTTP_X_FORWARDED",
-                "HTTP_X_CLUSTER_CLIENT_IP",
-                "HTTP_CLIENT_IP",
-                "HTTP_FORWARDED_FOR",
-                "HTTP_FORWARDED",
-                "HTTP_VIA",
-                "X-Real-IP"
+                "Proxy-Client-IP", "WL-Proxy-Client-IP", "HTTP_X_FORWARDED_FOR",
+                "HTTP_X_FORWARDED", "HTTP_X_CLUSTER_CLIENT_IP", "HTTP_CLIENT_IP",
+                "HTTP_FORWARDED_FOR", "HTTP_FORWARDED", "HTTP_VIA", "X-Real-IP"
         };
         for (String header : proxyHeaders) {
             clientIp = extractIpFromHeader(request, header);
@@ -42,53 +55,72 @@ public class IpUtil {
             }
         }
 
+        // Fallback to remote address
         return getRemoteAddress(request);
     }
 
-    /*
-    * Extrai e valida o IP de um cabeçalho
-    * @param request Request HTTP
-    * @param headerName Nome do cabeçalho a ser verificado
-    * @return IP extraído ou null se inválido
-    * */
-    private  static String extractIpFromHeader(ServerHttpRequest request, String headerName) {
+    /**
+     * Extracts the first valid IP from a header value.
+     *
+     * @param request    the HTTP request
+     * @param headerName the header name to check
+     * @return the extracted IP or null if invalid
+     */
+    private static String extractIpFromHeader(ServerHttpRequest request, String headerName) {
         String headerValue = request.getHeaders().getFirst(headerName);
         if (!StringUtils.hasText(headerValue) || "unknown".equalsIgnoreCase(headerValue)) {
             return null;
         }
 
         String[] ips = headerValue.split(",");
-        String clientIp = ips[0].trim();
-        return isValidIp(clientIp) ? clientIp : null;
+        for (String ip : ips) {
+            String trimmedIp = ip.trim();
+            if (isValidIp(trimmedIp)) {
+                return trimmedIp;
+            }
+        }
+        return null;
     }
 
-    /*
-    * @param ip Endereço Ip a ser validado
-    * @return true se o IP for válido
-    * */
+    /**
+     * Validates if the IP is a valid public address (not private, local, or unknown).
+     *
+     * @param ip the IP address to validate
+     * @return true if valid
+     */
     private static boolean isValidIp(String ip) {
-        if (!StringUtils.hasText(ip)) {
+        if (!StringUtils.hasText(ip) || "unknown".equalsIgnoreCase(ip)) {
             return false;
         }
 
-        return !"unknown".equalsIgnoreCase(ip) &&
-                !ip.startsWith("127.") &&
-                !ip.startsWith("0.") &&
-                !ip.startsWith("10.") &&
-                !ip.startsWith("172.16.") &&
-                !ip.startsWith("192.168.") &&
-                !"::1".equals(ip) &&
-                !"0:0:0:0:0:0:0:1".equals(ip);
+        try {
+            InetAddress inetAddress = InetAddress.getByName(ip);
+            if (inetAddress.isLoopbackAddress() || inetAddress.isSiteLocalAddress() || inetAddress.isAnyLocalAddress()) {
+                return false;
+            }
+
+            // Additional regex check for format
+            if (inetAddress instanceof java.net.Inet4Address) {
+                return IPV4_PATTERN.matcher(ip).matches();
+            } else if (inetAddress instanceof java.net.Inet6Address) {
+                return IPV6_PATTERN.matcher(ip).matches();
+            }
+        } catch (UnknownHostException e) {
+            // Invalid IP format
+            // Optional: Log.error("Invalid IP: " + ip, e);
+        }
+        return false;
     }
 
-    /*
-    * Obtém o endereço remoto direto da request como falllback
-    * @param request Request HTTP
-    * @return Endereço Ip remoto ou localhost como último fallback
-    * */
+    /**
+     * Gets the remote address as a fallback.
+     *
+     * @param request the HTTP request
+     * @return the remote IP or "127.0.0.1" as default
+     */
     private static String getRemoteAddress(ServerHttpRequest request) {
         return Optional.ofNullable(request.getRemoteAddress())
                 .map(address -> address.getAddress().getHostAddress())
-                .orElse("127.0.0.1"); // padrão
+                .orElse("127.0.0.1");
     }
 }
